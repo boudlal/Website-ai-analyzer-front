@@ -1,0 +1,70 @@
+{
+  "name": "able-pro-material-next-ts",
+  "version": "4.0.0",
+  "author": {
+    "name": "PhoenixCoded",
+    "email": "PhoenixCoded@gmail.com",
+    "url": "https://themeforest.net/user/phoenixcoded"
+  },
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint \"src/**/*.{js,jsx,ts,tsx}\"",
+    "lint:fix": "eslint --fix \"src/**/*.{js,jsx,ts,tsx}\"",
+    "prettier": "prettier --write \"src/**/*.{js,jsx,ts,tsx}\"",
+    "knip": "knip"
+  },
+  "dependencies": {
+    "@emotion/cache": "11.14.0",
+    "@emotion/react": "11.14.0",
+    "@emotion/styled": "11.14.0",
+    "@mui/lab": "7.0.0-beta.12",
+    "@mui/material": "7.1.1",
+    "@mui/system": "7.1.1",
+    "@wandersonalwes/iconsax-react": "0.0.10",
+    "axios": "1.10.0",
+    "formik": "2.4.6",
+    "framer-motion": "12.18.1",
+    "history": "5.3.0",
+    "lodash-es": "4.17.21",
+    "next": "15.3.4",
+    "next-auth": "4.24.11",
+    "react": "19.1.0",
+    "react-csv": "2.2.2",
+    "react-device-detect": "2.2.3",
+    "react-dom": "19.1.0",
+    "react-intl": "7.1.11",
+    "react-syntax-highlighter": "^5.8.0",
+    "react-timer-hook": "4.0.5",
+    "simplebar-react": "3.3.1",
+    "stylis-plugin-rtl": "2.1.1",
+    "swr": "2.3.3",
+    "yup": "1.6.1"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "3.3.1",
+    "@eslint/js": "9.29.0",
+    "@types/lodash-es": "4.17.12",
+    "@types/node": "24.0.3",
+    "@types/react": "19.1.8",
+    "@types/react-csv": "1.1.10",
+    "@types/react-dom": "19.1.6",
+    "@types/react-syntax-highlighter": "15.5.13",
+    "@typescript-eslint/eslint-plugin": "8.34.1",
+    "@typescript-eslint/parser": "8.34.1",
+    "eslint": "9.29.0",
+    "eslint-config-next": "15.3.4",
+    "eslint-config-prettier": "10.1.5",
+    "eslint-plugin-prettier": "5.5.0",
+    "knip": "5.61.2",
+    "prettier": "3.5.3",
+    "typescript": "5.8.3"
+  },
+  "resolutions": {
+    "@types/react": "19.1.4",
+    "@types/react-dom": "19.1.5"
+  },
+  "packageManager": "yarn@4.9.1"
+}
