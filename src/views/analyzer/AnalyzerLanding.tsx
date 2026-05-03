@@ -25,7 +25,18 @@ import AnimateButton from 'components/@extended/AnimateButton';
 import MainCard from 'components/MainCard';
 
 // types
-import type { AIInsightIssue, AnalysisReport, PerformanceMetrics, SignalSeverity, Technology } from 'types/analyzer/analysis';
+import type {
+  AIInsightIssue,
+  AnalysisReport,
+  CMSData,
+  PerformanceMetrics,
+  PerformanceSignal,
+  SecurityCategory,
+  SecurityContext,
+  SignalSeverity,
+  Technology,
+  WordPressRuntimeIndicators
+} from 'types/analyzer/analysis';
 
 type MetricStatus = 'good' | 'medium' | 'bad';
 
@@ -51,6 +62,13 @@ type MetricGroup = {
   items: MetricItem[];
 };
 
+type SignalGroup = {
+  category: SecurityCategory;
+  title: string;
+  description: string;
+  signals: PerformanceSignal[];
+};
+
 const priorityRank: Record<SignalSeverity, number> = { high: 0, medium: 1, low: 2 };
 
 const statusScore: Record<MetricStatus, number> = { good: 92, medium: 64, bad: 32 };
@@ -59,6 +77,37 @@ const statusLabels: Record<MetricStatus, string> = {
   good: 'Good',
   medium: 'Needs work',
   bad: 'Critical'
+};
+
+const securityCategoryMeta: Record<SecurityCategory, { title: string; description: string }> = {
+  transport: {
+    title: 'Transport & TLS',
+    description: 'HTTPS, HSTS, mixed content, TLS version, and certificate health.'
+  },
+  headers: {
+    title: 'Security headers',
+    description: 'Browser-side protections like CSP, frame protection, and policy headers.'
+  },
+  cookies: {
+    title: 'Cookies',
+    description: 'Secure, HttpOnly, SameSite, and lifetime checks for cookies.'
+  },
+  cors: {
+    title: 'CORS',
+    description: 'Cross-origin sharing configuration and broad access risks.'
+  },
+  'info-disclosure': {
+    title: 'Information disclosure',
+    description: 'Headers, source maps, and debug traces that reveal internals.'
+  },
+  wordpress: {
+    title: 'WordPress exposure',
+    description: 'Public WordPress endpoints and metadata exposure checks.'
+  },
+  dependencies: {
+    title: 'Dependency hygiene',
+    description: 'Third-party script integrity and passive vulnerable library signatures.'
+  }
 };
 
 const thresholdMap: Record<string, { good: number; medium: number }> = {
@@ -121,6 +170,73 @@ const formatMetricValue = (key: string, value: number) => {
   if (key.toLowerCase().includes('bytes')) return formatBytes(value);
   if (['totalRequests', 'thirdPartyRequests', 'longTasks', 'renderBlockingResources'].includes(key)) return value.toLocaleString();
   return `${Math.round(value).toLocaleString()} ms`;
+};
+
+const formatCount = (value: number) => value.toLocaleString();
+
+const getSignalCategory = (signal: PerformanceSignal): SecurityCategory | undefined => {
+  if (signal.category) return signal.category;
+  if (signal.id.startsWith('sec-wp-')) return 'wordpress';
+  if (signal.id.startsWith('sec-')) return 'headers';
+  return undefined;
+};
+
+const isWordPressDetected = (cms: CMSData | undefined, technologies: Technology[]) => {
+  const detectedCMS = cms?.detectedCMS?.toLowerCase();
+  return (
+    detectedCMS?.includes('wordpress') ||
+    technologies.some((technology) => technology.category === 'cms' && technology.name.toLowerCase() === 'wordpress')
+  );
+};
+
+const getWordPressSignals = (signals: PerformanceSignal[]) =>
+  signals.filter((signal) => signal.id.startsWith('wp-') || signal.id.startsWith('sec-wp-'));
+
+const getSecuritySignals = (signals: PerformanceSignal[]) => signals.filter((signal) => signal.id.startsWith('sec-'));
+
+const groupSecuritySignals = (signals: PerformanceSignal[]): SignalGroup[] => {
+  const grouped = new Map<SecurityCategory, PerformanceSignal[]>();
+
+  for (const signal of signals) {
+    const category = getSignalCategory(signal);
+    if (!category) continue;
+    grouped.set(category, [...(grouped.get(category) ?? []), signal]);
+  }
+
+  return Object.entries(securityCategoryMeta)
+    .map(([category, meta]) => ({
+      category: category as SecurityCategory,
+      ...meta,
+      signals: grouped.get(category as SecurityCategory) ?? []
+    }))
+    .filter((group) => group.signals.length > 0);
+};
+
+const countSignalsBySeverity = (signals: PerformanceSignal[]) =>
+  signals.reduce(
+    (counts, signal) => ({
+      ...counts,
+      [signal.severity]: counts[signal.severity] + 1
+    }),
+    { high: 0, medium: 0, low: 0 } as Record<SignalSeverity, number>
+  );
+
+const wordpressIndicatorMetrics = (indicators?: WordPressRuntimeIndicators): MetricItem[] => {
+  if (!indicators) return [];
+
+  return [
+    createMetric('pluginAssetRequests', 'Plugin asset requests', indicators.pluginAssetRequests, 'Requests loaded from WordPress plugins.'),
+    createMetric('pluginAssetBytes', 'Plugin asset weight', indicators.pluginAssetBytes, 'Transferred bytes for WordPress plugin assets.'),
+    createMetric(
+      'themeAssetRequests',
+      'Theme asset requests',
+      indicators.themeAssetRequests,
+      'Requests loaded from the active WordPress theme.'
+    ),
+    createMetric('wpContentAssetRequests', 'WP content requests', indicators.wpContentAssetRequests, 'Requests served from wp-content.'),
+    createMetric('adminAjaxRequests', 'Admin Ajax requests', indicators.adminAjaxRequests, 'Runtime requests to admin-ajax.php.'),
+    createMetric('wpJsonRequests', 'REST API requests', indicators.wpJsonRequests, 'Runtime calls to WordPress REST endpoints.')
+  ].filter(Boolean) as MetricItem[];
 };
 
 const stripHtml = (value?: string) =>
@@ -258,7 +374,8 @@ function AnalysisLoading({ progress, onCancel }: { progress: number; onCancel: (
           <Box>
             <Typography variant="h4">Running full website analysis</Typography>
             <Typography color="text.secondary" sx={{ mt: 0.75 }}>
-              Scanning runtime signals, Lighthouse metrics, assets, and AI recommendations. This can take a minute.
+              Scanning runtime signals, Lighthouse metrics, CMS clues, passive security checks, and AI recommendations. This can take a
+              minute.
             </Typography>
           </Box>
           <Button color="secondary" variant="outlined" onClick={onCancel}>
@@ -267,7 +384,7 @@ function AnalysisLoading({ progress, onCancel }: { progress: number; onCancel: (
         </Stack>
         <LinearProgress variant="determinate" value={progress} sx={{ height: 10, borderRadius: 999 }} />
         <Grid container spacing={2}>
-          {['Collecting page data', 'Measuring performance', 'Generating fix instructions'].map((step) => (
+          {['Collecting page data', 'Checking CMS and security', 'Generating fix instructions'].map((step) => (
             <Grid key={step} size={{ xs: 12, md: 4 }}>
               <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
                 <CircularProgress size={20} />
@@ -363,6 +480,195 @@ function TechnologiesPanel({ technologies }: { technologies: Technology[] }) {
           ))}
         </Stack>
       )}
+    </MainCard>
+  );
+}
+
+function SignalCards({ signals, emptyMessage }: { signals: PerformanceSignal[]; emptyMessage: string }) {
+  if (signals.length === 0) {
+    return (
+      <Alert color="success" variant="outlined">
+        {emptyMessage}
+      </Alert>
+    );
+  }
+
+  return (
+    <Stack spacing={1.5}>
+      {signals.map((signal) => (
+        <Box
+          key={signal.id}
+          sx={(theme) => ({
+            p: 2,
+            borderRadius: 2,
+            border: `1px solid ${alpha(theme.palette[priorityColor(signal.severity)].main, 0.28)}`,
+            bgcolor: alpha(theme.palette[priorityColor(signal.severity)].main, 0.06)
+          })}
+        >
+          <Stack spacing={1}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { xs: 'flex-start', sm: 'center' } }}>
+              <Chip color={priorityColor(signal.severity)} variant="light" label={signal.severity.toUpperCase()} />
+              <Chip variant="outlined" label={signal.id} />
+            </Stack>
+            <Typography variant="h5">{signal.message}</Typography>
+            {signal.evidence && <Typography color="text.secondary">Evidence: {signal.evidence}</Typography>}
+            {signal.recommendation && <Typography color="text.secondary">Recommendation: {signal.recommendation}</Typography>}
+          </Stack>
+        </Box>
+      ))}
+    </Stack>
+  );
+}
+
+function WordPressPanel({ cms, signals, isWordPress }: { cms?: CMSData; signals: PerformanceSignal[]; isWordPress: boolean }) {
+  if (!cms && !isWordPress && signals.length === 0) return null;
+
+  const indicators = cms?.wordpress?.indicators;
+  const metrics = wordpressIndicatorMetrics(indicators);
+  const pluginNames = cms?.pluginFindings?.map((plugin) => plugin.name) ?? cms?.plugins ?? [];
+  const themeNames = cms?.themeFindings?.map((theme) => theme.name) ?? cms?.themes ?? [];
+
+  return (
+    <MainCard title="WordPress CMS analysis" subheader="CMS-specific runtime signals, plugin pressure, and WordPress security exposure">
+      <Stack spacing={3}>
+        <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
+          <Chip
+            color={isWordPress ? 'success' : 'default'}
+            variant="light"
+            label={cms?.detectedCMS || (isWordPress ? 'WordPress' : 'CMS detected')}
+          />
+          <Chip variant="outlined" label={`${pluginNames.length} plugin${pluginNames.length === 1 ? '' : 's'}`} />
+          <Chip variant="outlined" label={`${themeNames.length} theme${themeNames.length === 1 ? '' : 's'}`} />
+        </Stack>
+
+        {(pluginNames.length > 0 || themeNames.length > 0) && (
+          <Grid container spacing={2}>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <Box sx={(theme) => ({ p: 2, borderRadius: 2, border: `1px solid ${theme.palette.divider}` })}>
+                <Typography variant="h5">Plugins</Typography>
+                <Typography color="text.secondary" sx={{ mt: 0.75 }}>
+                  {pluginNames.length > 0 ? pluginNames.join(', ') : 'No plugin names were returned.'}
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <Box sx={(theme) => ({ p: 2, borderRadius: 2, border: `1px solid ${theme.palette.divider}` })}>
+                <Typography variant="h5">Themes</Typography>
+                <Typography color="text.secondary" sx={{ mt: 0.75 }}>
+                  {themeNames.length > 0 ? themeNames.join(', ') : 'No theme names were returned.'}
+                </Typography>
+              </Box>
+            </Grid>
+          </Grid>
+        )}
+
+        {metrics.length > 0 && (
+          <Grid container spacing={2}>
+            {metrics.map((metric) => (
+              <Grid key={metric.key} size={{ xs: 12, sm: 6, lg: 4 }}>
+                <Box
+                  sx={(theme) => ({
+                    height: '100%',
+                    p: 2,
+                    borderRadius: 2,
+                    border: `1px solid ${alpha(theme.palette[statusColor(metric.status)].main, 0.35)}`,
+                    bgcolor: alpha(theme.palette[statusColor(metric.status)].main, 0.08)
+                  })}
+                >
+                  <Stack spacing={1}>
+                    <Typography variant="subtitle1">{metric.label}</Typography>
+                    <Typography variant="h4">
+                      {metric.key.toLowerCase().includes('bytes') ? formatBytes(metric.value) : formatCount(metric.value)}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {metric.helper}
+                    </Typography>
+                  </Stack>
+                </Box>
+              </Grid>
+            ))}
+          </Grid>
+        )}
+
+        <Box>
+          <Typography variant="h4" sx={{ mb: 1.5 }}>
+            WordPress findings
+          </Typography>
+          <SignalCards signals={signals} emptyMessage="No WordPress-specific issues were returned for this analysis." />
+        </Box>
+      </Stack>
+    </MainCard>
+  );
+}
+
+function SecurityPanel({ security, signals }: { security?: SecurityContext; signals: PerformanceSignal[] }) {
+  if (!security && signals.length === 0) return null;
+
+  const groups = groupSecuritySignals(signals);
+  const counts = countSignalsBySeverity(signals);
+  const severitySummaries: Array<{ label: string; count: number; color: 'error' | 'warning' | 'success' }> = [
+    { label: 'High', count: counts.high, color: 'error' },
+    { label: 'Medium', count: counts.medium, color: 'warning' },
+    { label: 'Low', count: counts.low, color: 'success' }
+  ];
+
+  return (
+    <MainCard
+      title="Security checks"
+      subheader="Passive public checks for transport, headers, cookies, disclosure, WordPress exposure, and dependencies"
+    >
+      <Stack spacing={3}>
+        <Grid container spacing={2}>
+          {severitySummaries.map(({ label, count, color }) => (
+            <Grid key={label} size={{ xs: 12, sm: 4 }}>
+              <Box sx={(theme) => ({ p: 2, borderRadius: 2, bgcolor: alpha(theme.palette[color].main, 0.08) })}>
+                <Typography variant="h3">{count}</Typography>
+                <Typography color="text.secondary">{label} severity findings</Typography>
+              </Box>
+            </Grid>
+          ))}
+        </Grid>
+
+        {security && (
+          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
+            {security.tls && (
+              <Chip
+                color={security.tls.isHttps ? 'success' : 'error'}
+                variant="light"
+                label={security.tls.isHttps ? 'HTTPS enabled' : 'HTTP only'}
+              />
+            )}
+            {security.tls?.tlsVersion && <Chip variant="outlined" label={`TLS ${security.tls.tlsVersion}`} />}
+            {typeof security.tls?.certificateDaysUntilExpiry === 'number' && (
+              <Chip variant="outlined" label={`Certificate expires in ${security.tls.certificateDaysUntilExpiry} days`} />
+            )}
+            {security.dependencies && (
+              <Chip
+                variant="outlined"
+                label={`${security.dependencies.thirdPartyScriptsWithoutSri} third-party script${security.dependencies.thirdPartyScriptsWithoutSri === 1 ? '' : 's'} without SRI`}
+              />
+            )}
+          </Stack>
+        )}
+
+        {groups.length === 0 ? (
+          <Alert color="success" variant="outlined">
+            No deterministic security findings were returned.
+          </Alert>
+        ) : (
+          <Stack spacing={2.5}>
+            {groups.map((group) => (
+              <Box key={group.category}>
+                <Typography variant="h4">{group.title}</Typography>
+                <Typography color="text.secondary" sx={{ mt: 0.5, mb: 1.5 }}>
+                  {group.description}
+                </Typography>
+                <SignalCards signals={group.signals} emptyMessage="No findings in this category." />
+              </Box>
+            ))}
+          </Stack>
+        )}
+      </Stack>
     </MainCard>
   );
 }
@@ -508,6 +814,9 @@ export default function AnalyzerLanding() {
   const technologies = useMemo(() => report?.context.techDetection?.technologies ?? [], [report]);
   const issues = useMemo(() => normalizeIssues(report?.aiInsights?.issues), [report]);
   const overallScore = useMemo(() => getOverallScore(metricGroups), [metricGroups]);
+  const isWordPressCMS = useMemo(() => isWordPressDetected(report?.context.cms, technologies), [report, technologies]);
+  const wordpressSignals = useMemo(() => getWordPressSignals(report?.signals ?? []), [report]);
+  const securitySignals = useMemo(() => getSecuritySignals(report?.signals ?? []), [report]);
 
   useEffect(() => {
     if (!isLoading) return undefined;
@@ -595,7 +904,7 @@ export default function AnalyzerLanding() {
               <Stack spacing={4} sx={{ textAlign: 'center', alignItems: 'center' }}>
                 <motion.div initial={{ opacity: 0, y: 32 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
                   <Stack spacing={2} sx={{ alignItems: 'center' }}>
-                    <Chip color="primary" variant="light" label="AI website performance analyzer" />
+                    <Chip color="primary" variant="light" label="AI website performance, CMS & security analyzer" />
                     <Typography
                       variant="h1"
                       sx={{
@@ -608,8 +917,8 @@ export default function AnalyzerLanding() {
                       Find the issues slowing down your website before users do.
                     </Typography>
                     <Typography variant="h5" color="text.secondary" sx={{ maxWidth: 760, fontWeight: 400 }}>
-                      Run a complete scan for performance, runtime signals, assets, and AI-generated fixes. Paste a URL and get a
-                      prioritized action plan in minutes.
+                      Run a complete scan for performance, runtime signals, WordPress CMS clues, passive security checks, and AI-generated
+                      fixes. Paste a URL and get a prioritized action plan in minutes.
                     </Typography>
                   </Stack>
                 </motion.div>
@@ -656,8 +965,8 @@ export default function AnalyzerLanding() {
                 <Grid container spacing={2} sx={{ width: '100%', maxWidth: 900 }}>
                   {[
                     ['Performance metrics', 'Lighthouse-backed measurements and resource breakdowns.'],
-                    ['Priority fixes', 'Issues sorted by high, medium, and low impact.'],
-                    ['Actionable guidance', 'Clear instructions your team can apply immediately.']
+                    ['WordPress & CMS signals', 'CMS detection plus WordPress plugin, theme, and REST activity insights.'],
+                    ['Security checks', 'Passive public checks for headers, TLS, cookies, CORS, and exposure risks.']
                   ].map(([title, text]) => (
                     <Grid key={title} size={{ xs: 12, md: 4 }}>
                       <MainCard contentSX={{ p: 2.25 }} sx={{ height: '100%', bgcolor: alpha(theme.palette.background.paper, 0.74) }}>
@@ -688,6 +997,8 @@ export default function AnalyzerLanding() {
           <Stack spacing={4}>
             <SummaryPanel report={report} score={overallScore} issueCount={issues.length} />
             <TechnologiesPanel technologies={technologies} />
+            <WordPressPanel cms={report.context.cms} signals={wordpressSignals} isWordPress={isWordPressCMS} />
+            <SecurityPanel security={report.context.security} signals={securitySignals} />
 
             {report.errors?.length > 0 && (
               <Alert severity="warning" variant="outlined">
