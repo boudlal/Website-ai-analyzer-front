@@ -7,6 +7,7 @@ import { alpha, useTheme } from '@mui/material/styles';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
+import ButtonBase from '@mui/material/ButtonBase';
 import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
 import Collapse from '@mui/material/Collapse';
@@ -67,6 +68,13 @@ type SignalGroup = {
   title: string;
   description: string;
   signals: PerformanceSignal[];
+};
+
+type SectionNavItem = {
+  id: string;
+  label: string;
+  description: string;
+  badge?: string;
 };
 
 const priorityRank: Record<SignalSeverity, number> = { high: 0, medium: 1, low: 2 };
@@ -132,6 +140,8 @@ const thresholdMap: Record<string, { good: number; medium: number }> = {
   thirdPartyRequests: { good: 10, medium: 25 },
   thirdPartyBytes: { good: 500000, medium: 1000000 }
 };
+
+const SECTION_SCROLL_MARGIN_TOP = 96;
 
 const statusColor = (status: MetricStatus) => {
   if (status === 'good') return 'success';
@@ -461,6 +471,48 @@ function SummaryPanel({ report, score, issueCount }: { report: AnalysisReport; s
   );
 }
 
+function SectionsSommairePanel({ sections, onSelect }: { sections: SectionNavItem[]; onSelect: (id: string) => void }) {
+  return (
+    <MainCard title="Sommaire" subheader="Jump to any section in this analysis report">
+      <Grid container spacing={2}>
+        {sections.map((section) => (
+          <Grid key={section.id} size={{ xs: 12, sm: 6, lg: 4 }}>
+            <ButtonBase
+              onClick={() => onSelect(section.id)}
+              sx={(theme) => ({
+                width: '100%',
+                display: 'block',
+                textAlign: 'left',
+                borderRadius: 2,
+                border: `1px solid ${theme.palette.divider}`,
+                p: 2,
+                transition: theme.transitions.create(['transform', 'border-color', 'background-color'], {
+                  duration: theme.transitions.duration.shorter
+                }),
+                '&:hover': {
+                  transform: 'translateY(-2px)',
+                  borderColor: alpha(theme.palette.primary.main, 0.45),
+                  bgcolor: alpha(theme.palette.primary.main, 0.05)
+                }
+              })}
+            >
+              <Stack spacing={1}>
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Typography variant="h5">{section.label}</Typography>
+                  {section.badge && <Chip size="small" variant="light" color="primary" label={section.badge} />}
+                </Stack>
+                <Typography variant="body2" color="text.secondary">
+                  {section.description}
+                </Typography>
+              </Stack>
+            </ButtonBase>
+          </Grid>
+        ))}
+      </Grid>
+    </MainCard>
+  );
+}
+
 function TechnologiesPanel({ technologies }: { technologies: Technology[] }) {
   return (
     <MainCard title="Detected technologies" subheader="Deterministic stack detection from runtime and response signals">
@@ -677,7 +729,7 @@ function IssuesPanel({ issues }: { issues: NormalizedIssue[] }) {
   const [expandedIssue, setExpandedIssue] = useState<string | null>(null);
 
   return (
-    <Box id="issues" sx={{ scrollMarginTop: 96 }}>
+    <Box id="issues" sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN_TOP }}>
       <MainCard title="Priority issues and fixes" subheader="AI-detected issues sorted by business impact and severity">
         {issues.length === 0 ? (
           <Alert color="success" variant="outlined">
@@ -741,7 +793,7 @@ function IssuesPanel({ issues }: { issues: NormalizedIssue[] }) {
 
 function MetricsPanel({ groups }: { groups: MetricGroup[] }) {
   return (
-    <Stack spacing={3} id="metrics" sx={{ scrollMarginTop: 96 }}>
+    <Stack spacing={3} id="metrics" sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN_TOP }}>
       <Box>
         <Typography variant="h3">All performance metrics</Typography>
         <Typography color="text.secondary" sx={{ mt: 0.75 }}>
@@ -817,6 +869,64 @@ export default function AnalyzerLanding() {
   const isWordPressCMS = useMemo(() => isWordPressDetected(report?.context.cms, technologies), [report, technologies]);
   const wordpressSignals = useMemo(() => getWordPressSignals(report?.signals ?? []), [report]);
   const securitySignals = useMemo(() => getSecuritySignals(report?.signals ?? []), [report]);
+  const hasWordPressSection = Boolean(report?.context.cms || isWordPressCMS || wordpressSignals.length > 0);
+  const hasSecuritySection = Boolean(report?.context.security || securitySignals.length > 0);
+  const hasErrorsSection = Boolean(report?.errors?.length);
+  const sectionNavItems = useMemo<SectionNavItem[]>(() => {
+    return [
+      {
+        id: 'technologies',
+        label: 'Technologies',
+        description: 'Detected stack, confidence, and runtime fingerprints.',
+        badge: `${technologies.length}`
+      },
+      {
+        id: 'wordpress',
+        label: 'WordPress',
+        description: 'CMS indicators, plugin/theme inventory, and WP findings.',
+        badge: `${wordpressSignals.length}`
+      },
+      {
+        id: 'security',
+        label: 'Security',
+        description: 'Transport, headers, cookies, and exposure checks.',
+        badge: `${securitySignals.length}`
+      },
+      {
+        id: 'errors',
+        label: 'Errors',
+        description: 'Warnings produced while collecting this analysis.',
+        badge: report?.errors?.length ? `${report.errors.length}` : undefined
+      },
+      {
+        id: 'issues',
+        label: 'Priority issues',
+        description: 'Top AI-detected issues ordered by severity and impact.',
+        badge: `${issues.length}`
+      },
+      {
+        id: 'metrics',
+        label: 'Metrics',
+        description: 'Core web vitals and full Lighthouse metric groups.',
+        badge: `${metricGroups.length}`
+      }
+    ].filter(
+      (section) =>
+        (section.id !== 'wordpress' || hasWordPressSection) &&
+        (section.id !== 'security' || hasSecuritySection) &&
+        (section.id !== 'errors' || hasErrorsSection)
+    );
+  }, [
+    hasErrorsSection,
+    hasSecuritySection,
+    hasWordPressSection,
+    issues.length,
+    metricGroups.length,
+    report?.errors,
+    securitySignals.length,
+    technologies.length,
+    wordpressSignals.length
+  ]);
 
   useEffect(() => {
     if (!isLoading) return undefined;
@@ -834,6 +944,13 @@ export default function AnalyzerLanding() {
       resultRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, [report, error]);
+
+  const handleSectionSelect = (sectionId: string) => {
+    const sectionElement = document.getElementById(sectionId);
+    if (!sectionElement) return;
+
+    sectionElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -996,14 +1113,27 @@ export default function AnalyzerLanding() {
         {report && (
           <Stack spacing={4}>
             <SummaryPanel report={report} score={overallScore} issueCount={issues.length} />
-            <TechnologiesPanel technologies={technologies} />
-            <WordPressPanel cms={report.context.cms} signals={wordpressSignals} isWordPress={isWordPressCMS} />
-            <SecurityPanel security={report.context.security} signals={securitySignals} />
+            {sectionNavItems.length > 0 && <SectionsSommairePanel sections={sectionNavItems} onSelect={handleSectionSelect} />}
+            <Box id="technologies" sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN_TOP }}>
+              <TechnologiesPanel technologies={technologies} />
+            </Box>
+            {hasWordPressSection && (
+              <Box id="wordpress" sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN_TOP }}>
+                <WordPressPanel cms={report.context.cms} signals={wordpressSignals} isWordPress={isWordPressCMS} />
+              </Box>
+            )}
+            {hasSecuritySection && (
+              <Box id="security" sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN_TOP }}>
+                <SecurityPanel security={report.context.security} signals={securitySignals} />
+              </Box>
+            )}
 
-            {report.errors?.length > 0 && (
-              <Alert severity="warning" variant="outlined">
-                {report.errors.join(' ')}
-              </Alert>
+            {hasErrorsSection && (
+              <Box id="errors" sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN_TOP }}>
+                <Alert severity="warning" variant="outlined">
+                  {report.errors?.join(' ')}
+                </Alert>
+              </Box>
             )}
 
             <IssuesPanel issues={issues} />
