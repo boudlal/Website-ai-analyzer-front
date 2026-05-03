@@ -850,6 +850,7 @@ function MetricsPanel({ groups }: { groups: MetricGroup[] }) {
 export default function AnalyzerLanding() {
   const theme = useTheme();
   const resultRef = useRef<HTMLDivElement | null>(null);
+  const loadingRef = useRef<HTMLDivElement | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const [url, setUrl] = useState('');
   const [touched, setTouched] = useState(false);
@@ -943,6 +944,12 @@ export default function AnalyzerLanding() {
       resultRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, [report, error]);
+
+  useEffect(() => {
+    if (!isLoading || !loadingRef.current) return;
+
+    loadingRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [isLoading]);
 
   const handleSectionSelect = (sectionId: string) => {
     const sectionElement = document.getElementById(sectionId);
@@ -1101,7 +1108,11 @@ export default function AnalyzerLanding() {
       </Box>
 
       <Container ref={resultRef} sx={{ py: { xs: 6, md: 9 } }}>
-        {isLoading && <AnalysisLoading progress={progress} onCancel={handleCancel} />}
+        {isLoading && (
+          <Box ref={loadingRef}>
+            <AnalysisLoading progress={progress} onCancel={handleCancel} />
+          </Box>
+        )}
 
         {error && (
           <Alert severity="error" variant="outlined" sx={{ mt: 4 }}>
