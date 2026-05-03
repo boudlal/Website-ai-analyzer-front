@@ -1,20 +1,20 @@
 'use client';
 
 // next
-import NextLink from 'next/link';
+// import NextLink from 'next/link';
 import Image from 'next/image';
 
 // material-ui
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
-import Button from '@mui/material/Button';
+// import Button from '@mui/material/Button';
 import Grid from '@mui/material/Grid';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import Box from '@mui/material/Box';
 
 // project-imports
-import { APP_DEFAULT_PATH } from '../config';
+// import { APP_DEFAULT_PATH } from '../config';
 
 // assets
 const error500 = '/assets/images/maintenance/img-error-500.svg';
@@ -49,9 +49,9 @@ export default function Error500() {
           <Typography color="text.secondary" variant="body2" align="center" sx={{ width: { xs: '73%', sm: '70%' }, mt: 1 }}>
             Server error 500. we fixing the problem. please try again at a later stage.
           </Typography>
-          <Button LinkComponent={NextLink} href={APP_DEFAULT_PATH} variant="contained" sx={{ textTransform: 'none', mt: 4 }}>
+          {/* <Button LinkComponent={NextLink} href={APP_DEFAULT_PATH} variant="contained" sx={{ textTransform: 'none', mt: 4 }}>
             Back To Home
-          </Button>
+          </Button> */}
         </Stack>
       </Grid>
     </Grid>
