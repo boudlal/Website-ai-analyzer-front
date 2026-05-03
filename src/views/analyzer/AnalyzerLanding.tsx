@@ -564,7 +564,6 @@ function SignalCards({ signals, emptyMessage }: { signals: PerformanceSignal[]; 
             </Stack>
             <Typography variant="h5">{signal.message}</Typography>
             {signal.evidence && <Typography color="text.secondary">Evidence: {signal.evidence}</Typography>}
-            {signal.recommendation && <Typography color="text.secondary">Recommendation: {signal.recommendation}</Typography>}
           </Stack>
         </Box>
       ))}
@@ -1114,6 +1113,7 @@ export default function AnalyzerLanding() {
           <Stack spacing={4}>
             <SummaryPanel report={report} score={overallScore} issueCount={issues.length} />
             {sectionNavItems.length > 0 && <SectionsSommairePanel sections={sectionNavItems} onSelect={handleSectionSelect} />}
+            <IssuesPanel issues={issues} />
             <Box id="technologies" sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN_TOP }}>
               <TechnologiesPanel technologies={technologies} />
             </Box>
@@ -1135,8 +1135,6 @@ export default function AnalyzerLanding() {
                 </Alert>
               </Box>
             )}
-
-            <IssuesPanel issues={issues} />
             <MetricsPanel groups={metricGroups} />
           </Stack>
         )}
