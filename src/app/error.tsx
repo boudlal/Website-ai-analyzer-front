@@ -1,7 +1,7 @@
 'use client';
 
 // next
-import Link from 'next/link';
+import NextLink from 'next/link';
 import Image from 'next/image';
 
 // material-ui
@@ -49,7 +49,7 @@ export default function Error500() {
           <Typography color="text.secondary" variant="body2" align="center" sx={{ width: { xs: '73%', sm: '70%' }, mt: 1 }}>
             Server error 500. we fixing the problem. please try again at a later stage.
           </Typography>
-          <Button component={Link} href={APP_DEFAULT_PATH} variant="contained" sx={{ textTransform: 'none', mt: 4 }}>
+          <Button LinkComponent={NextLink} href={APP_DEFAULT_PATH} variant="contained" sx={{ textTransform: 'none', mt: 4 }}>
             Back To Home
           </Button>
         </Stack>
