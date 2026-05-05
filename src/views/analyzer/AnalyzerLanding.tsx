@@ -42,8 +42,15 @@ import type {
 type MetricStatus = 'good' | 'medium' | 'bad';
 
 type NormalizedIssue = {
+  id?: string;
   title: string;
   priority: SignalSeverity;
+  category?: AIInsightIssue['category'];
+  impact?: SignalSeverity;
+  effort?: AIInsightIssue['effort'];
+  whyItMatters?: string;
+  fixStepsNonTechnical: string[];
+  fixStepsTechnical: string[];
   description: string;
   instructions: string;
 };
@@ -351,9 +358,17 @@ const buildMetricGroups = (performance?: PerformanceMetrics): MetricGroup[] => {
 const normalizeIssues = (issues: AIInsightIssue[] = []): NormalizedIssue[] =>
   issues
     .map((issue) => ({
+      id: issue.id,
       title: issue.title,
       priority: issue.priority,
-      description: stripHtml(issue.description || issue.recommendation) || 'Review this recommendation before applying the fix.',
+      category: issue.category,
+      impact: issue.impact,
+      effort: issue.effort,
+      whyItMatters: issue.whyItMatters,
+      fixStepsNonTechnical: issue.fixStepsNonTechnical ?? [],
+      fixStepsTechnical: issue.fixStepsTechnical ?? [],
+      description:
+        stripHtml(issue.description || issue.whyItMatters || issue.recommendation) || 'Review this recommendation before applying the fix.',
       instructions: issue.instructions || issue.recommendation || ''
     }))
     .sort((a, b) => priorityRank[a.priority] - priorityRank[b.priority]);
@@ -749,8 +764,12 @@ function IssuesPanel({ issues }: { issues: NormalizedIssue[] }) {
                 <Stack spacing={1.25}>
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { xs: 'flex-start', sm: 'center' } }}>
                     <Chip color={priorityColor(issue.priority)} variant="light" label={issue.priority.toUpperCase()} />
+                    {issue.category && <Chip variant="outlined" label={issue.category} />}
+                    {issue.impact && <Chip variant="outlined" label={`Impact: ${issue.impact}`} />}
+                    {issue.effort && <Chip variant="outlined" label={`Effort: ${issue.effort}`} />}
                   </Stack>
                   <Typography variant="h5">{issue.title}</Typography>
+                  {issue.whyItMatters && <Typography color="text.secondary">{issue.whyItMatters}</Typography>}
                   <Typography color="text.secondary">{issue.description}</Typography>
                   {issue.instructions && (
                     <>
@@ -900,7 +919,7 @@ export default function AnalyzerLanding() {
       },
       {
         id: 'issues',
-        label: 'Priority issues',
+        label: 'Priority issues and fixes',
         description: 'Top AI-detected issues ordered by severity and impact.',
         badge: `${issues.length}`
       },

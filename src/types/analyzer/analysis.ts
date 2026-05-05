@@ -55,8 +55,18 @@ export type PerformanceSignal = {
 };
 
 export type AIInsightIssue = {
+  id?: string;
   title: string;
   priority: SignalSeverity;
+  category?: 'performance' | 'security' | 'seo' | 'ux' | 'cms' | 'javascript';
+  impact?: SignalSeverity;
+  effort?: 'easy' | 'medium' | 'hard';
+  whyItMatters?: string;
+  evidence?: string[];
+  expectedOutcome?: string;
+  confidence?: SignalSeverity;
+  fixStepsNonTechnical?: string[];
+  fixStepsTechnical?: string[];
   recommendation?: string;
   description?: string;
   instructions?: string;
