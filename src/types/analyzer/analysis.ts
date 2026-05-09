@@ -183,6 +183,21 @@ export type SecurityContext = {
   dependencies?: SecurityDependencyData;
 };
 
+export type SEOData = {
+  title?: string;
+  metaDescription?: string;
+  canonical?: string;
+  robotsMeta?: string;
+  xRobotsTag?: string;
+};
+
+export type SEOContext = {
+  titleLength?: number;
+  metaDescriptionLength?: number;
+  isNoindex?: boolean;
+  hasCanonical?: boolean;
+};
+
 export type AnalysisReport = {
   url: string;
   generatedAt: string;
@@ -192,6 +207,7 @@ export type AnalysisReport = {
     techDetection?: TechDetectionResult;
     cms?: CMSData;
     security?: SecurityContext;
+    seo?: SEOContext;
     runtime?: unknown;
     assets?: unknown;
     jsProfiling?: unknown;

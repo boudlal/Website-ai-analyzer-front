@@ -34,6 +34,7 @@ import type {
   PerformanceSignal,
   SecurityCategory,
   SecurityContext,
+  SEOContext,
   SignalSeverity,
   Technology,
   WordPressRuntimeIndicators
@@ -210,6 +211,8 @@ const getWordPressSignals = (signals: PerformanceSignal[]) =>
   signals.filter((signal) => signal.id.startsWith('wp-') || signal.id.startsWith('sec-wp-'));
 
 const getSecuritySignals = (signals: PerformanceSignal[]) => signals.filter((signal) => signal.id.startsWith('sec-'));
+
+const getSEOSignals = (signals: PerformanceSignal[]) => signals.filter((signal) => signal.id.startsWith('seo-'));
 
 const groupSecuritySignals = (signals: PerformanceSignal[]): SignalGroup[] => {
   const grouped = new Map<SecurityCategory, PerformanceSignal[]>();
@@ -399,8 +402,8 @@ function AnalysisLoading({ progress, onCancel }: { progress: number; onCancel: (
           <Box>
             <Typography variant="h4">Running full website analysis</Typography>
             <Typography color="text.secondary" sx={{ mt: 0.75 }}>
-              Scanning runtime signals, Lighthouse metrics, CMS clues, passive security checks, and AI recommendations. This can take a
-              minute.
+              Scanning runtime signals, Lighthouse metrics, on-page SEO from the crawl, CMS clues, passive security checks, and AI
+              recommendations. This can take a minute.
             </Typography>
           </Box>
           <Button color="secondary" variant="outlined" onClick={onCancel}>
@@ -409,7 +412,7 @@ function AnalysisLoading({ progress, onCancel }: { progress: number; onCancel: (
         </Stack>
         <LinearProgress variant="determinate" value={progress} sx={{ height: 10, borderRadius: 999 }} />
         <Grid container spacing={2}>
-          {['Collecting page data', 'Checking CMS and security', 'Generating fix instructions'].map((step) => (
+          {['Collecting page data', 'Checking SEO, CMS, and security', 'Generating fix instructions'].map((step) => (
             <Grid key={step} size={{ xs: 12, md: 4 }}>
               <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
                 <CircularProgress size={20} />
@@ -524,6 +527,46 @@ function SectionsSommairePanel({ sections, onSelect }: { sections: SectionNavIte
           </Grid>
         ))}
       </Grid>
+    </MainCard>
+  );
+}
+
+function SEOPanel({ seo, signals }: { seo?: SEOContext; signals: PerformanceSignal[] }) {
+  if (!seo && signals.length === 0) return null;
+
+  return (
+    <MainCard
+      title="On-page SEO (crawl)"
+      subheader="Checks use HTML and response headers from this crawl only—not a full Search Console or index coverage audit."
+    >
+      <Stack spacing={3}>
+        {seo && (
+          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
+            <Chip variant="outlined" label={seo.titleLength !== undefined ? `Title length: ${seo.titleLength}` : 'Title length: —'} />
+            <Chip
+              variant="outlined"
+              label={
+                seo.metaDescriptionLength !== undefined
+                  ? `Meta description length: ${seo.metaDescriptionLength}`
+                  : 'Meta description length: —'
+              }
+            />
+            <Chip
+              color={seo.hasCanonical ? 'success' : 'warning'}
+              variant="light"
+              label={seo.hasCanonical ? 'Canonical: yes' : 'Canonical: no'}
+            />
+            <Chip color={seo.isNoindex ? 'warning' : 'success'} variant="light" label={seo.isNoindex ? 'Noindex: yes' : 'Noindex: no'} />
+          </Stack>
+        )}
+
+        <Box>
+          <Typography variant="h4" sx={{ mb: 1.5 }}>
+            SEO findings
+          </Typography>
+          <SignalCards signals={signals} emptyMessage="No SEO issues detected from this crawl." />
+        </Box>
+      </Stack>
     </MainCard>
   );
 }
@@ -888,8 +931,10 @@ export default function AnalyzerLanding() {
   const isWordPressCMS = useMemo(() => isWordPressDetected(report?.context.cms, technologies), [report, technologies]);
   const wordpressSignals = useMemo(() => getWordPressSignals(report?.signals ?? []), [report]);
   const securitySignals = useMemo(() => getSecuritySignals(report?.signals ?? []), [report]);
+  const seoSignals = useMemo(() => getSEOSignals(report?.signals ?? []), [report]);
   const hasWordPressSection = Boolean(report?.context.cms || isWordPressCMS || wordpressSignals.length > 0);
   const hasSecuritySection = Boolean(report?.context.security || securitySignals.length > 0);
+  const hasSEOSection = Boolean(report?.context.seo || seoSignals.length > 0);
   const hasErrorsSection = Boolean(report?.errors?.length);
   const sectionNavItems = useMemo<SectionNavItem[]>(() => {
     return [
@@ -898,6 +943,12 @@ export default function AnalyzerLanding() {
         label: 'Technologies',
         description: 'Detected stack, confidence, and runtime fingerprints.',
         badge: `${technologies.length}`
+      },
+      {
+        id: 'seo',
+        label: 'SEO',
+        description: 'On-page signals from crawled HTML and response headers.',
+        badge: `${seoSignals.length}`
       },
       {
         id: 'wordpress',
@@ -933,16 +984,19 @@ export default function AnalyzerLanding() {
       (section) =>
         (section.id !== 'wordpress' || hasWordPressSection) &&
         (section.id !== 'security' || hasSecuritySection) &&
+        (section.id !== 'seo' || hasSEOSection) &&
         (section.id !== 'errors' || hasErrorsSection)
     );
   }, [
     hasErrorsSection,
+    hasSEOSection,
     hasSecuritySection,
     hasWordPressSection,
     issues.length,
     metricGroups.length,
     report?.errors,
     securitySignals.length,
+    seoSignals.length,
     technologies.length,
     wordpressSignals.length
   ]);
@@ -1046,7 +1100,7 @@ export default function AnalyzerLanding() {
               <Stack spacing={4} sx={{ textAlign: 'center', alignItems: 'center' }}>
                 <motion.div initial={{ opacity: 0, y: 32 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
                   <Stack spacing={2} sx={{ alignItems: 'center' }}>
-                    <Chip color="primary" variant="light" label="AI website performance, CMS & security analyzer" />
+                    <Chip color="primary" variant="light" label="AI website performance, CMS, SEO & security analyzer" />
                     <Typography
                       variant="h1"
                       sx={{
@@ -1059,8 +1113,8 @@ export default function AnalyzerLanding() {
                       Find the issues slowing down your website before users do.
                     </Typography>
                     <Typography variant="h5" color="text.secondary" sx={{ maxWidth: 760, fontWeight: 400 }}>
-                      Run a complete scan for performance, runtime signals, WordPress CMS clues, passive security checks, and AI-generated
-                      fixes. Paste a URL and get a prioritized action plan in minutes.
+                      Run a complete scan for performance, runtime signals, on-page SEO from the crawl, WordPress CMS clues, passive
+                      security checks, and AI-generated fixes. Paste a URL and get a prioritized action plan in minutes.
                     </Typography>
                   </Stack>
                 </motion.div>
@@ -1107,10 +1161,11 @@ export default function AnalyzerLanding() {
                 <Grid container spacing={2} sx={{ width: '100%', maxWidth: 900 }}>
                   {[
                     ['Performance metrics', 'Lighthouse-backed measurements and resource breakdowns.'],
+                    ['On-page SEO (crawl)', 'Title, meta description, canonical, and robots signals from HTML and headers.'],
                     ['WordPress & CMS signals', 'CMS detection plus WordPress plugin, theme, and REST activity insights.'],
                     ['Security checks', 'Passive public checks for headers, TLS, cookies, CORS, and exposure risks.']
                   ].map(([title, text]) => (
-                    <Grid key={title} size={{ xs: 12, md: 4 }}>
+                    <Grid key={title} size={{ xs: 12, md: 6, lg: 3 }}>
                       <MainCard contentSX={{ p: 2.25 }} sx={{ height: '100%', bgcolor: alpha(theme.palette.background.paper, 0.74) }}>
                         <Typography variant="h5">{title}</Typography>
                         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
@@ -1147,6 +1202,11 @@ export default function AnalyzerLanding() {
             <Box id="technologies" sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN_TOP }}>
               <TechnologiesPanel technologies={technologies} />
             </Box>
+            {hasSEOSection && (
+              <Box id="seo" sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN_TOP }}>
+                <SEOPanel seo={report.context.seo} signals={seoSignals} />
+              </Box>
+            )}
             {hasWordPressSection && (
               <Box id="wordpress" sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN_TOP }}>
                 <WordPressPanel cms={report.context.cms} signals={wordpressSignals} isWordPress={isWordPressCMS} />
